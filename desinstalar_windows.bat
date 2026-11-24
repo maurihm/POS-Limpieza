@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 >nul
 title Desinstalar Accesos - POS Limpieza
 cd /d "%~dp0"
 

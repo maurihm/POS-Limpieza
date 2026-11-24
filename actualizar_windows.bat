@@ -1,7 +1,10 @@
 @echo off
-chcp 65001 >nul
 title Actualizar POS Limpieza
 cd /d "%~dp0"
+
+if exist "%ProgramFiles%\nodejs\node.exe" (
+    set "PATH=%ProgramFiles%\nodejs;%PATH%"
+)
 
 echo ========================================================
 echo           ACTUALIZANDO POS LIMPIEZA DESDE GIT
@@ -12,9 +15,11 @@ echo [1/4] Deteniendo servidor actual (tu base de datos esta segura)...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\windows\detener_pos.ps1"
 
 echo [2/4] Descargando cambios (git pull)...
-git pull
-if %errorlevel% neq 0 (
-    echo Aviso: no se pudo ejecutar git pull. Continuando con archivos locales...
+where git >nul 2>nul
+if %errorlevel% equ 0 (
+    git pull
+) else (
+    echo Aviso: Git no esta instalado. Continuando con archivos locales...
 )
 
 echo [3/4] Actualizando dependencias y compilando...

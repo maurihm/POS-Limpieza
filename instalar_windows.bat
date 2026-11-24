@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 >nul
 title Instalador - POS Limpieza
 cd /d "%~dp0"
 
@@ -8,26 +7,37 @@ echo          INSTALADOR DE POS LIMPIEZA (WINDOWS)
 echo ========================================================
 echo.
 
+if exist "%ProgramFiles%\nodejs\node.exe" (
+    set "PATH=%ProgramFiles%\nodejs;%PATH%"
+)
+
 where node >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [1/4] Node.js no encontrado. Intentando instalar Node.js LTS con winget...
-    where winget >nul 2>nul
+    echo [1/4] Node.js no encontrado. Descargando e instalando Node.js 24 LTS...
+    echo.
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\windows\instalar_node.ps1"
     if %errorlevel% neq 0 (
         echo.
-        echo ERROR: No se encontro Node.js ni winget.
-        echo Descarga e instala Node.js 24 LTS desde https://nodejs.org y vuelve a ejecutar este instalador.
+        echo ERROR: No se pudo instalar Node.js automaticamente.
+        echo Descarga Node.js 24 LTS manualmente desde https://nodejs.org y vuelve a ejecutar este instalador.
         pause
         exit /b 1
     )
-    winget install --id OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements
-    echo.
-    echo Node.js instalado. Cierra esta ventana y vuelve a abrir instalar_windows.bat para continuar.
+    if exist "%ProgramFiles%\nodejs\node.exe" (
+        set "PATH=%ProgramFiles%\nodejs;%PATH%"
+    )
+)
+
+where node >nul 2>nul
+if %errorlevel% neq 0 (
+    echo Node.js se instalo pero requiere reiniciar esta ventana.
+    echo Cierra esta ventana y vuelve a dar doble clic en instalar_windows.bat.
     pause
     exit /b 0
 )
 
-for /f "tokens=1 delims=." %%v in ('node -v') do set NODE_MAJOR=%%v
-echo [1/4] Node.js detectado: %NODE_MAJOR%
+for /f "delims=" %%v in ('node -v') do set NODE_VER=%%v
+echo [1/4] Node.js detectado: %NODE_VER%
 echo.
 
 echo [2/4] Instalando dependencias del sistema (puede tardar 30-60 seg)...
@@ -58,7 +68,7 @@ echo   Ya puedes abrir "POS Limpieza" desde tu Escritorio.
 echo   PIN inicial Admin: 0000  ^|  Cajero (Ana): 1234
 echo ========================================================
 echo.
-set /p RUNNOW=¿Deseas abrir POS Limpieza ahora mismo? (S/N): 
+set /p RUNNOW=Deseas abrir POS Limpieza ahora mismo? (S/N): 
 if /I "%RUNNOW%"=="S" (
     wscript.exe "%~dp0scripts\windows\launch_pos.vbs"
 )
