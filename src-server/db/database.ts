@@ -337,6 +337,8 @@ function seedIfEmpty(db: DatabaseSync): void {
       { sku: 'LIQ-005', barcode: '7501000000059', name: 'Detergente Ropa Color 1L', catId: catLiquidos.lastInsertRowid, unit: 'LITER', cost: 1300, tienda: 2600, revendedor: 2050, stock: 4.5, min: 10 },
       { sku: 'LIQ-006', barcode: '7501000000066', name: 'Fabuloso Lavanda 1L', catId: catLiquidos.lastInsertRowid, unit: 'LITER', cost: 800, tienda: 1600, revendedor: 1200, stock: 42, min: 10 },
       { sku: 'LIQ-007', barcode: '7501000000073', name: 'Desengrasante Industrial 1L', catId: catLiquidos.lastInsertRowid, unit: 'LITER', cost: 1400, tienda: 2800, revendedor: 2200, stock: 16, min: 5 },
+      { sku: 'GRA-001', barcode: '7505000000019', name: 'Detergente en Polvo (Granel kg)', catId: catLiquidos.lastInsertRowid, unit: 'WEIGHT', cost: 2100, tienda: 3600, revendedor: 2900, stock: 30, min: 8 },
+      { sku: 'GRA-002', barcode: '7505000000026', name: 'Bicarbonato Limpieza (Granel kg)', catId: catLiquidos.lastInsertRowid, unit: 'WEIGHT', cost: 1800, tienda: 3200, revendedor: 2500, stock: 20, min: 5 },
       { sku: 'ENV-001', barcode: '7502000000018', name: 'Envase PET 1L c/Tapa', catId: catEnvases.lastInsertRowid, unit: 'PIECE', cost: 400, tienda: 800, revendedor: 600, stock: 120, min: 25 },
       { sku: 'ENV-002', barcode: '7502000000025', name: 'Atomizador Chico 500ml', catId: catEnvases.lastInsertRowid, unit: 'PIECE', cost: 800, tienda: 1500, revendedor: 1200, stock: 25, min: 10 },
       { sku: 'ENV-003', barcode: '7502000000032', name: 'Garrafón 4L c/Asa', catId: catEnvases.lastInsertRowid, unit: 'PIECE', cost: 1100, tienda: 2000, revendedor: 1600, stock: 35, min: 10 },

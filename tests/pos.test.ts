@@ -20,8 +20,10 @@ import { roundHalfUpCents } from '../src-server/services/pricing.ts';
 import { buildSaleTicket, encodeCodepage } from '../src-server/hardware/escpos.ts';
 import {
   applyImportPreview,
+  exportComprehensiveMovementsReport,
   exportFullCatalog,
   exportImportTemplate,
+  exportInventoryMovementsReport,
   exportWhatsAppPriceList,
   parseImportExcel,
 } from '../src-server/exports/excel.ts';
@@ -224,10 +226,10 @@ test('HU-08, RF-07 & ESC/POS CP850: Excel WhatsApp, Importación masiva, PDF QR 
     // Import template roundtrip
     const tpl = exportImportTemplate(db);
     const preview = parseImportExcel(db, tpl);
-    assert.equal(preview.length, 2);
+    assert.equal(preview.length, 3);
     assert.equal(preview[0].action, 'CREATE');
     const applied = applyImportPreview(db, preview, 1);
-    assert.equal(applied.created, 2);
+    assert.equal(applied.created, 3);
 
     // QR PDF generation
     const pdfBuf = await generateQrSheetPdf(db);
@@ -245,6 +247,63 @@ test('HU-08, RF-07 & ESC/POS CP850: Excel WhatsApp, Importación masiva, PDF QR 
     // Manual backup
     const bkp = createDatabaseBackup(db, dbPath, 'test');
     assert.ok(fs.existsSync(bkp.filepath));
+  } finally {
+    cleanup();
+  }
+});
+
+test('Venta a granel por pesos ($10 de Cloro) + por peso (0.25 kg) y Reporte Excel 5 hojas por periodo', () => {
+  const { db, cleanup } = freshDb();
+  try {
+    const tienda = listPriceTiers(db).find((t) => t.is_default)!;
+    const cloro = listProducts(db).find((p) => p.sku === 'LIQ-001')!; // $15.00 / L
+    const detergentePolvo = listProducts(db).find((p) => p.sku === 'GRA-001')!; // $36.00 / kg
+
+    // Customer asks for "$10.00 de cloro" -> 1000 / 1500 = 0.6667 L -> $10.00 exact!
+    // Plus 250g (0.25 kg) of detergente en polvo -> $9.00!
+    const qtyForTenPesos = Number((1000 / 1500).toFixed(4));
+    const sale = createSale(db, {
+      user_id: 2,
+      price_tier_id: tienda.id,
+      items: [
+        { product_id: cloro.id, quantity: qtyForTenPesos },
+        { product_id: detergentePolvo.id, quantity: 0.25 },
+      ],
+      payments: [{ method: 'CASH', amount_cents: 1900, tendered_cents: 2000 }],
+    });
+
+    assert.equal(sale.items[0].line_total_cents, 1000); // exact $10.00
+    assert.equal(sale.items[1].line_total_cents, 900);  // exact $9.00
+    assert.equal(sale.total_cents, 1900);
+
+    const cloroAfter = listProducts(db).find((p) => p.sku === 'LIQ-001')!;
+    assert.equal(cloroAfter.stock_quantity, Number((50 - qtyForTenPesos).toFixed(4)));
+    const polvoAfter = listProducts(db).find((p) => p.sku === 'GRA-001')!;
+    assert.equal(polvoAfter.stock_quantity, 29.75);
+
+    // Comprehensive 5-sheet Excel movements report for today (local timezone)
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const xlsxBuf = exportComprehensiveMovementsReport(db, today, today, 'Diario (Hoy)');
+    const wb = XLSX.read(xlsxBuf, { type: 'buffer' });
+    assert.deepEqual(wb.SheetNames, [
+      'Resumen',
+      'Ventas',
+      'Productos Vendidos',
+      'Movimientos Inventario',
+      'Movimientos Caja',
+    ]);
+    const ventasRows = XLSX.utils.sheet_to_json(wb.Sheets['Ventas']);
+    const invRows = XLSX.utils.sheet_to_json(wb.Sheets['Movimientos Inventario']);
+    assert.equal(ventasRows.length, 1);
+    assert.ok(invRows.length >= 2);
+
+    // Standalone Kardex Excel report
+    const kardexBuf = exportInventoryMovementsReport(db, today, today, 'xlsx');
+    const kwb = XLSX.read(kardexBuf, { type: 'buffer' });
+    assert.equal(kwb.SheetNames[0], 'Movimientos Inventario');
+    assert.ok(XLSX.utils.sheet_to_json(kwb.Sheets['Movimientos Inventario']).length >= 2);
   } finally {
     cleanup();
   }

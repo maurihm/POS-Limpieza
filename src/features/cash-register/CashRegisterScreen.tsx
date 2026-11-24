@@ -58,7 +58,51 @@ export const CashRegisterScreen: React.FC = () => {
   // Exports & QR PDF
   const [reportFrom, setReportFrom] = useState(todayIsoDate());
   const [reportTo, setReportTo] = useState(todayIsoDate());
+  const [periodLabel, setPeriodLabel] = useState('Diario (Hoy)');
   const [qrCatId, setQrCatId] = useState<string>('');
+
+  const applyPeriodPreset = (preset: 'today' | 'week' | 'last7' | 'month' | 'lastMonth' | 'year') => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const today = toIso(now);
+
+    if (preset === 'today') {
+      setReportFrom(today);
+      setReportTo(today);
+      setPeriodLabel('Diario (Hoy)');
+    } else if (preset === 'week') {
+      const day = now.getDay();
+      const diffToMonday = day === 0 ? 6 : day - 1;
+      const mon = new Date(now);
+      mon.setDate(now.getDate() - diffToMonday);
+      setReportFrom(toIso(mon));
+      setReportTo(today);
+      setPeriodLabel('Semanal (Esta semana)');
+    } else if (preset === 'last7') {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 6);
+      setReportFrom(toIso(start));
+      setReportTo(today);
+      setPeriodLabel('Últimos 7 días');
+    } else if (preset === 'month') {
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      setReportFrom(toIso(first));
+      setReportTo(today);
+      setPeriodLabel('Mensual (Este mes)');
+    } else if (preset === 'lastMonth') {
+      const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const last = new Date(now.getFullYear(), now.getMonth(), 0);
+      setReportFrom(toIso(first));
+      setReportTo(toIso(last));
+      setPeriodLabel('Mes pasado');
+    } else if (preset === 'year') {
+      const first = new Date(now.getFullYear(), 0, 1);
+      setReportFrom(toIso(first));
+      setReportTo(today);
+      setPeriodLabel(`Anual (${now.getFullYear()})`);
+    }
+  };
 
   // Bulk Excel Import
   const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(null);
@@ -385,13 +429,112 @@ export const CashRegisterScreen: React.FC = () => {
         </div>
       )}
 
-      {/* SECTION 2: EXCEL EXPORTS, BULK IMPORT & QR PDF GENERATOR (RF-07) */}
+      {/* SECTION 2: REPORTES EXCEL POR PERIODO (DIARIO / SEMANAL / MENSUAL / ANUAL) */}
+      <div className="rounded-2xl border border-emerald-200 bg-white p-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-emerald-700">
+              <FileSpreadsheet className="h-5 w-5" />
+              <h3 className="text-base font-extrabold text-slate-900">
+                Reportes Excel de Movimientos y Ventas (Diario, Semanal, Mensual, Anual)
+              </h3>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Elige el periodo con un clic y descarga un libro Excel completo con 5 hojas: <strong>Resumen, Ventas, Productos Vendidos, Movimientos Inventario (Kardex) y Movimientos de Caja</strong>.
+            </p>
+          </div>
+          <span className="rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-extrabold text-emerald-800">
+            Periodo: {periodLabel} ({reportFrom} → {reportTo})
+          </span>
+        </div>
+
+        {/* Period Quick Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { id: 'today', label: 'Hoy (Diario)' },
+            { id: 'week', label: 'Esta Semana' },
+            { id: 'last7', label: 'Últimos 7 días' },
+            { id: 'month', label: 'Este Mes (Mensual)' },
+            { id: 'lastMonth', label: 'Mes Pasado' },
+            { id: 'year', label: 'Este Año' },
+          ].map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => applyPeriodPreset(p.id as 'today' | 'week' | 'last7' | 'month' | 'lastMonth' | 'year')}
+              className={`min-h-[38px] rounded-xl border px-3.5 text-xs font-extrabold transition ${
+                periodLabel.toLowerCase().includes(p.label.split(' ')[0].toLowerCase())
+                  ? 'border-emerald-600 bg-emerald-600 text-white'
+                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+          <div className="flex items-center gap-1.5 ml-auto">
+            <input
+              type="date"
+              value={reportFrom}
+              onChange={(e) => {
+                setReportFrom(e.target.value);
+                setPeriodLabel('Personalizado');
+              }}
+              className="rounded-xl border border-slate-300 px-2.5 py-1.5 text-xs font-semibold"
+            />
+            <span className="text-xs text-slate-400">a</span>
+            <input
+              type="date"
+              value={reportTo}
+              onChange={(e) => {
+                setReportTo(e.target.value);
+                setPeriodLabel('Personalizado');
+              }}
+              className="rounded-xl border border-slate-300 px-2.5 py-1.5 text-xs font-semibold"
+            />
+          </div>
+        </div>
+
+        {/* Download Actions for Selected Period */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
+          <button
+            type="button"
+            onClick={() =>
+              triggerDownload(
+                `/api/exports/movements-report?date_from=${reportFrom}&date_to=${reportTo}&label=${encodeURIComponent(periodLabel)}`
+              )
+            }
+            className="min-h-[48px] inline-flex items-center justify-center gap-2 rounded-xl bg-[#16A34A] px-4 text-sm font-extrabold text-white shadow-xs hover:bg-green-700"
+          >
+            <Download className="h-4 w-4" /> Excel Completo 5 Hojas (.xlsx)
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              triggerDownload(`/api/exports/kardex?format=xlsx&date_from=${reportFrom}&date_to=${reportTo}`)
+            }
+            className="min-h-[48px] inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800 hover:bg-slate-50"
+          >
+            <Download className="h-4 w-4 text-blue-600" /> Movimientos Inventario / Kardex (.xlsx)
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              triggerDownload(`/api/exports/sales-profit?format=xlsx&date_from=${reportFrom}&date_to=${reportTo}`)
+            }
+            className="min-h-[48px] inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800 hover:bg-slate-50"
+          >
+            <Download className="h-4 w-4 text-emerald-600" /> Solo Ventas y Utilidades (.xlsx)
+          </button>
+        </div>
+      </div>
+
+      {/* SECTION 3: CATÁLOGO EXCEL, IMPORTACIÓN MASIVA & HOJAS QR PDF (RF-07) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Excel & CSV Exports */}
+        {/* Catalog & WhatsApp Exports */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
           <div className="flex items-center gap-2 text-emerald-700">
             <FileSpreadsheet className="h-5 w-5" />
-            <h3 className="font-extrabold text-slate-900">Exportar a Excel (.xlsx / CSV)</h3>
+            <h3 className="font-extrabold text-slate-900">Catálogo y Lista de Precios</h3>
           </div>
           <p className="text-xs text-slate-500">
             Columnas limpias con acentos UTF-8 listos para abrir en Microsoft Excel o compartir por WhatsApp.
@@ -421,23 +564,6 @@ export const CashRegisterScreen: React.FC = () => {
             >
               <span>Catálogo en CSV (UTF-8 BOM)</span>
               <Download className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          <div className="border-t border-slate-100 pt-3 space-y-2">
-            <p className="text-xs font-bold text-slate-700">Reporte de Ventas y Utilidades</p>
-            <div className="grid grid-cols-2 gap-2">
-              <input type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs" />
-              <input type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs" />
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                triggerDownload(`/api/exports/sales-profit?format=xlsx&date_from=${reportFrom}&date_to=${reportTo}`)
-              }
-              className="w-full min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-3.5 text-xs font-bold text-white hover:bg-slate-800"
-            >
-              <Download className="h-4 w-4" /> Descargar Reporte de Utilidades (.xlsx)
             </button>
           </div>
         </div>

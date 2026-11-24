@@ -55,8 +55,10 @@ import {
 import { listSystemPrinters, sendRawEscPos } from './hardware/printer.ts';
 import {
   applyImportPreview,
+  exportComprehensiveMovementsReport,
   exportFullCatalog,
   exportImportTemplate,
+  exportInventoryMovementsReport,
   exportSalesProfitReport,
   exportWhatsAppPriceList,
   parseImportExcel,
@@ -80,6 +82,12 @@ const MIME: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
 };
+
+function localTodayIso(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 function sendJson(res: http.ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, {
@@ -430,7 +438,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (pathname === '/api/exports/sales-profit' && method === 'GET') {
         const fmt = url.searchParams.get('format') === 'csv' ? 'csv' : 'xlsx';
-        const today = new Date().toISOString().slice(0, 10);
+        const today = localTodayIso();
         const from = url.searchParams.get('date_from') || today;
         const to = url.searchParams.get('date_to') || today;
         const buf = exportSalesProfitReport(db, from, to, fmt);
@@ -441,6 +449,35 @@ const server = http.createServer(async (req, res) => {
             ? 'text/csv; charset=utf-8'
             : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           `reporte_ventas_utilidades_${from}_${to}.${fmt}`
+        );
+      }
+      if (pathname === '/api/exports/movements-report' && method === 'GET') {
+        const today = localTodayIso();
+        const from = url.searchParams.get('date_from') || today;
+        const to = url.searchParams.get('date_to') || today;
+        const label = url.searchParams.get('label') || 'Personalizado';
+        const buf = exportComprehensiveMovementsReport(db, from, to, label);
+        const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+        return sendBinary(
+          res,
+          buf,
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          `reporte_movimientos_${slug}_${from}_${to}.xlsx`
+        );
+      }
+      if (pathname === '/api/exports/kardex' && method === 'GET') {
+        const fmt = url.searchParams.get('format') === 'csv' ? 'csv' : 'xlsx';
+        const today = localTodayIso();
+        const from = url.searchParams.get('date_from') || today;
+        const to = url.searchParams.get('date_to') || today;
+        const buf = exportInventoryMovementsReport(db, from, to, fmt);
+        return sendBinary(
+          res,
+          buf,
+          fmt === 'csv'
+            ? 'text/csv; charset=utf-8'
+            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          `movimientos_inventario_${from}_${to}.${fmt}`
         );
       }
       if (pathname === '/api/exports/import-template' && method === 'GET') {

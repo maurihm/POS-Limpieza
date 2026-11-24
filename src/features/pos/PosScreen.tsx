@@ -13,6 +13,7 @@ import {
   Plus,
   Printer,
   RotateCcw,
+  Scale,
   Scissors,
   Search,
   ShoppingCart,
@@ -26,6 +27,7 @@ import { Modal, PinModal } from '../../ui/Components';
 import { formatCents, formatQty, pesosToCents, roundHalfUpCents, unitShort } from '../../utils/money';
 import { evaluateBestLinePromotionClient, resolveProductPriceClient } from '../../utils/promoEngine';
 import { playAddSound, playErrorSound, playSaleSuccessSound } from '../../utils/sound';
+import { BulkSaleModal } from './BulkSaleModal';
 import { PaymentModal } from './PaymentModal';
 
 const AUTOSAVE_KEY = 'pos_limpieza_autosave_cart_v1';
@@ -81,6 +83,12 @@ export const PosScreen: React.FC<{ onNavigate: (tab: string) => void }> = ({ onN
     newPriceCents: number;
   } | null>(null);
   const [recoveryPrompt, setRecoveryPrompt] = useState<AutosavedCart | null>(null);
+  const [promptBulkOnTap, setPromptBulkOnTap] = useState(true);
+  const [bulkModalTarget, setBulkModalTarget] = useState<{
+    product: Product;
+    editingUid?: string;
+    initialQty?: number;
+  } | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -631,33 +639,48 @@ export const PosScreen: React.FC<{ onNavigate: (tab: string) => void }> = ({ onN
         <div className="flex w-[68%] xl:w-[70%] flex-col border-r border-slate-200 min-h-0">
           {/* Search Bar & Categories */}
           <div className="border-b border-slate-200 bg-white px-4 py-3 space-y-2.5">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && searchQuery.trim()) {
-                    const exact = products.find(
-                      (p) =>
-                        p.is_active &&
-                        ((p.barcode && p.barcode.toLowerCase() === searchQuery.trim().toLowerCase()) ||
-                          p.sku.toLowerCase() === searchQuery.trim().toLowerCase())
-                    );
-                    if (exact) {
-                      addProductToCart(exact, 1);
-                      setSearchQuery('');
-                    } else if (visibleProducts.length === 1) {
-                      addProductToCart(visibleProducts[0], 1);
-                      setSearchQuery('');
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchQuery.trim()) {
+                      const exact = products.find(
+                        (p) =>
+                          p.is_active &&
+                          ((p.barcode && p.barcode.toLowerCase() === searchQuery.trim().toLowerCase()) ||
+                            p.sku.toLowerCase() === searchQuery.trim().toLowerCase())
+                      );
+                      if (exact) {
+                        addProductToCart(exact, 1);
+                        setSearchQuery('');
+                      } else if (visibleProducts.length === 1) {
+                        addProductToCart(visibleProducts[0], 1);
+                        setSearchQuery('');
+                      }
                     }
-                  }
-                }}
-                placeholder="Buscar producto por nombre, SKU o escanear código de barras/QR... (F2)"
-                className="w-full min-h-[46px] rounded-xl border border-slate-300 bg-slate-50 pl-11 pr-4 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
-              />
+                  }}
+                  placeholder="Buscar producto por nombre, SKU o escanear código de barras/QR... (F2)"
+                  className="w-full min-h-[46px] rounded-xl border border-slate-300 bg-slate-50 pl-11 pr-4 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setPromptBulkOnTap((v) => !v)}
+                className={`shrink-0 min-h-[46px] inline-flex items-center gap-1.5 rounded-xl border px-3 text-xs font-extrabold transition ${
+                  promptBulkOnTap
+                    ? 'border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100'
+                    : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                }`}
+                title="Cuando está activo, tocar un producto a granel abre el selector de cantidad o pesos ($)"
+              >
+                <Scale className="h-4 w-4" />
+                Granel: {promptBulkOnTap ? 'Preguntar' : '1 clic (+1)'}
+              </button>
             </div>
 
             <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
@@ -723,7 +746,14 @@ export const PosScreen: React.FC<{ onNavigate: (tab: string) => void }> = ({ onN
                     <button
                       key={prod.id}
                       type="button"
-                      onClick={() => addProductToCart(prod, 1)}
+                      onClick={() => {
+                        const isBulk = !prod.is_bundle && (prod.unit_type === 'LITER' || prod.unit_type === 'WEIGHT');
+                        if (isBulk && promptBulkOnTap) {
+                          setBulkModalTarget({ product: prod, initialQty: 1 });
+                        } else {
+                          addProductToCart(prod, 1);
+                        }
+                      }}
                       className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-2.5 text-left shadow-xs transition hover:border-blue-400 hover:shadow-md active:scale-[0.98]"
                     >
                       {/* Thumbnail */}
@@ -739,6 +769,8 @@ export const PosScreen: React.FC<{ onNavigate: (tab: string) => void }> = ({ onN
                           <Layers className="h-10 w-10 text-amber-500" />
                         ) : prod.unit_type === 'LITER' ? (
                           <Droplets className="h-10 w-10 text-sky-500" />
+                        ) : prod.unit_type === 'WEIGHT' ? (
+                          <Scale className="h-10 w-10 text-indigo-500" />
                         ) : (
                           <Package className="h-10 w-10 text-slate-400" />
                         )}
@@ -746,6 +778,11 @@ export const PosScreen: React.FC<{ onNavigate: (tab: string) => void }> = ({ onN
                         {prod.is_bundle && (
                           <span className="absolute left-1.5 top-1.5 rounded-md bg-amber-500 px-1.5 py-0.5 text-[10px] font-extrabold text-white shadow-xs">
                             COMBO
+                          </span>
+                        )}
+                        {!prod.is_bundle && (prod.unit_type === 'LITER' || prod.unit_type === 'WEIGHT') && (
+                          <span className="absolute left-1.5 top-1.5 rounded-md bg-sky-600 px-1.5 py-0.5 text-[10px] font-extrabold text-white shadow-xs">
+                            GRANEL {prod.unit_type === 'WEIGHT' ? 'KG' : 'L'}
                           </span>
                         )}
                         {resolved.using_fallback && (
@@ -955,10 +992,10 @@ export const PosScreen: React.FC<{ onNavigate: (tab: string) => void }> = ({ onN
                     </button>
                   </div>
 
-                  {/* Quick Fractional Liquid Pills (RF-01.3) */}
-                  {line.product.unit_type === 'LITER' && (
-                    <div className="flex items-center gap-1 pt-0.5">
-                      {[0.5, 1, 4, 20].map((q) => (
+                  {/* Quick Fractional Bulk Pills (LITER & WEIGHT) + Por $ */}
+                  {(line.product.unit_type === 'LITER' || line.product.unit_type === 'WEIGHT') && (
+                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                      {(line.product.unit_type === 'WEIGHT' ? [0.25, 0.5, 1, 2] : [0.5, 1, 4, 20]).map((q) => (
                         <button
                           key={q}
                           type="button"
@@ -969,9 +1006,22 @@ export const PosScreen: React.FC<{ onNavigate: (tab: string) => void }> = ({ onN
                               : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                           }`}
                         >
-                          {q} L
+                          {q} {unitShort(line.product.unit_type)}
                         </button>
                       ))}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setBulkModalTarget({
+                            product: line.product,
+                            editingUid: line.uid,
+                            initialQty: line.quantity,
+                          })
+                        }
+                        className="inline-flex items-center gap-0.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100"
+                      >
+                        <Scale className="h-3 w-3" /> Por $
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1055,6 +1105,27 @@ export const PosScreen: React.FC<{ onNavigate: (tab: string) => void }> = ({ onN
           Impresora: {settings?.printer_name || 'POS-80'} ({settings?.printer_mode || 'PREVIEW'})
         </div>
       </div>
+
+      {/* Bulk Sale Modal (Cantidad fraccionada o Por Pesos $) */}
+      <BulkSaleModal
+        product={bulkModalTarget?.product || null}
+        unitPriceCents={
+          bulkModalTarget
+            ? resolveProductPriceClient(bulkModalTarget.product, selectedTierId, defaultTier?.id || 1).price_cents
+            : 0
+        }
+        initialQty={bulkModalTarget?.initialQty ?? 1}
+        onClose={() => setBulkModalTarget(null)}
+        onConfirm={(qty) => {
+          if (!bulkModalTarget) return;
+          if (bulkModalTarget.editingUid) {
+            updateLineQuantity(bulkModalTarget.editingUid, qty);
+          } else {
+            addProductToCart(bulkModalTarget.product, qty);
+          }
+          setBulkModalTarget(null);
+        }}
+      />
 
       {/* Payment Modal */}
       <PaymentModal

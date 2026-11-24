@@ -25,7 +25,8 @@ export function evaluateBestLinePromotionClient(
   now: Date = new Date()
 ): { discount_cents: number; promo_label: string | null } {
   const grossCents = roundHalfUpCents(quantity * unitPriceCents);
-  const isoDay = now.toISOString().slice(0, 10);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const isoDay = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const jsDay = now.getDay();
   const isoWeekday = jsDay === 0 ? 7 : jsDay;
 

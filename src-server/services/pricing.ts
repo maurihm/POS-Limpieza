@@ -38,9 +38,14 @@ export function getIsoWeekday(date: Date): number {
   return d === 0 ? 7 : d;
 }
 
+function localDateIso(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export function isPromotionActiveAt(promo: Promotion, now: Date = new Date()): boolean {
   if (!promo.is_active) return false;
-  const isoDay = now.toISOString().slice(0, 10);
+  const isoDay = localDateIso(now);
   if (promo.valid_from && isoDay < promo.valid_from.slice(0, 10)) return false;
   if (promo.valid_until && isoDay > promo.valid_until.slice(0, 10)) return false;
   if (promo.days_of_week && promo.days_of_week.length > 0) {

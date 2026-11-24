@@ -410,7 +410,14 @@ export const CatalogScreen: React.FC = () => {
                             )}
                           </div>
                           <div>
-                            <p className="font-bold text-slate-900">{p.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-bold text-slate-900">{p.name}</p>
+                              {!p.is_bundle && (p.unit_type === 'LITER' || p.unit_type === 'WEIGHT') && (
+                                <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-extrabold text-sky-800">
+                                  GRANEL {p.unit_type === 'WEIGHT' ? 'KG' : 'L'}
+                                </span>
+                              )}
+                            </div>
                             {!p.is_active && (
                               <span className="text-[10px] font-bold text-red-600 uppercase">Inactivo</span>
                             )}
@@ -621,8 +628,8 @@ export const CatalogScreen: React.FC = () => {
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white"
                 >
                   <option value="PIECE">Pieza (enteros)</option>
-                  <option value="LITER">Litro (fraccionable)</option>
-                  <option value="WEIGHT">Peso / Kg (fraccionable)</option>
+                  <option value="LITER">A Granel — Litros (fraccionable / por $)</option>
+                  <option value="WEIGHT">A Granel — Kilogramos (fraccionable / por $)</option>
                 </select>
               </div>
             )}
